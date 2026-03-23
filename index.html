@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Nákladní doprava – jednoduchý dashboard</title>
+  <title>Nákladní doprava – dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
     :root{--bg:#f6f7fb;--card:#fff;--text:#1f2937;--muted:#6b7280;--border:#e5e7eb;--accent:#2563eb}
     *{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
@@ -26,8 +26,8 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Nákladní doprava – jednoduchý dashboard</h1>
-  <div class="sub">Opravená verze s automatickým rozpoznáním CSV oddělovače.</div>
+  <h1>Nákladní doprava – dashboard</h1>
+  <div class="sub">Jednoduchá verze pro GitHub Pages. Stačí kliknout na „Načíst data“.</div>
 
   <div class="card">
     <div class="grid">
@@ -52,7 +52,7 @@
         <select id="transport" multiple></select>
       </div>
       <div class="span2">
-        <label for="goods">Přepravované věci / další členění</label>
+        <label for="goods">Členění</label>
         <select id="goods" multiple></select>
       </div>
     </div>
@@ -65,11 +65,7 @@
   </div>
 
   <div class="card"><canvas id="chart" height="110"></canvas></div>
-  <div class="card">
-    <div class="table-wrap">
-      <table id="dataTable"><thead></thead><tbody></tbody></table>
-    </div>
-  </div>
+  <div class="card"><div class="table-wrap"><table id="dataTable"><thead></thead><tbody></tbody></table></div></div>
 </div>
 
 <script>
@@ -89,81 +85,68 @@ const els = {
 };
 
 const KNOWN_TRANSPORTS = [
-  'Nákladní doprava celkem','Železniční doprava','Silniční doprava','Letecká doprava',
-  'Vnitrozemská vodní doprava','Potrubní přeprava ropy','Potrubní přeprava zemního plynu','Potrubní doprava'
+  'Nákladní doprava celkem',
+  'Železniční doprava',
+  'Silniční doprava',
+  'Letecká doprava',
+  'Vnitrozemská vodní doprava',
+  'Potrubní přeprava ropy',
+  'Potrubní přeprava zemního plynu',
+  'Potrubní doprava'
 ];
 
 function normalize(str){
   return String(str ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
 }
-
-function detectDelimiter(text){
-  const firstLine = text.split(/\r?\n/).find(line => line.trim()) || '';
-  const candidates = [',',';','\t'];
-  let best = ',', bestCount = -1;
-  for(const d of candidates){
-    let count = 0, inQuotes = false;
-    for(let i=0;i<firstLine.length;i++){
-      const c = firstLine[i];
-      if(c === '"') inQuotes = !inQuotes;
-      else if(c === d && !inQuotes) count++;
-    }
-    if(count > bestCount){ best = d; bestCount = count; }
-  }
-  return best;
+function toNumber(val){
+  const s = String(val ?? '').trim().replace(/\u00A0/g,' ').replace(/\s/g,'').replace(',', '.');
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
 }
-
 function populateSelect(select, values, multiple=false, includeAll=true){
   select.innerHTML = '';
   if(includeAll && !multiple){
     const opt = document.createElement('option');
-    opt.value = '__ALL__'; opt.textContent = 'Vše';
+    opt.value = '__ALL__';
+    opt.textContent = 'Vše';
     select.appendChild(opt);
   }
   values.forEach(v => {
     const opt = document.createElement('option');
-    opt.value = v; opt.textContent = v;
+    opt.value = v;
+    opt.textContent = v;
     if(multiple) opt.selected = true;
     select.appendChild(opt);
   });
 }
-
 function selectedValues(select){
   return Array.from(select.selectedOptions).map(o => o.value).filter(v => v !== '__ALL__');
 }
 
-function toNumber(val){
-  if(val === null || val === undefined) return null;
-  const s = String(val).trim().replace(/\u00A0/g,' ').replace(/\s/g,'').replace(',', '.');
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
-}
-
 function parseCombinedLabel(label){
-  let parts = String(label || '').split(',').map(s => s.trim()).filter(Boolean);
+  const cleaned = String(label || '').replace(/^"+|"+$/g, '');
+  const parts = cleaned.split(',').map(s => s.trim()).filter(Boolean);
 
-  const last = parts[parts.length - 1] || '';
-  if(toNumber(last) !== null) parts = parts.slice(0, -1);
+  const metric = parts[0] || '';
+  const year = parts.find(p => /^\d{4}$/.test(p)) || '';
+  const transport = parts.find(p =>
+    KNOWN_TRANSPORTS.some(t => normalize(t) === normalize(p))
+  ) || 'Neuvedeno';
 
-  const yearIndex = parts.findIndex(p => /^\d{4}$/.test(p));
-  const year = yearIndex >= 0 ? parts[yearIndex] : '';
-  const transport = parts.find(p => KNOWN_TRANSPORTS.some(t => normalize(t) === normalize(p))) || '';
-  const indicator = parts[0] || '';
-  const unitMatch = indicator.match(/\(([^)]+)\)/);
+  const unitMatch = metric.match(/\(([^)]+)\)/);
   const unit = unitMatch ? unitMatch[1] : '';
 
   const extras = parts.filter(p =>
-    p !== indicator &&
-    p !== transport &&
+    p !== metric &&
     p !== year &&
-    normalize(p) !== 'cesko' &&
-    normalize(p) !== 'česko'
+    p !== transport &&
+    normalize(p) !== 'cesko'
   );
 
   let goods = extras.join(' – ');
   if(!goods) goods = 'Celkem';
 
-  return { indicator, unit, year, transport, goods };
+  return { metric, year, transport, unit, goods };
 }
 
 function fillFilters(){
@@ -206,18 +189,19 @@ function applyFilters(){
 }
 
 function renderChart(){
-  const grouped = {};
+  const years = [...new Set(filteredRows.map(r => r.year).filter(Boolean))].sort();
+  const byTransport = {};
+
   filteredRows.forEach(r => {
-    const label = r.transport || r.goods || 'Neuvedeno';
-    const year = String(r.year || '');
-    const val = r.valueNum ?? 0;
-    if(!grouped[label]) grouped[label] = {};
-    grouped[label][year] = (grouped[label][year] || 0) + val;
+    const key = r.transport;
+    if(!byTransport[key]) byTransport[key] = {};
+    byTransport[key][r.year] = r.valueNum ?? 0;
   });
 
-  const years = [...new Set(filteredRows.map(r => String(r.year)).filter(v => /^\d{4}$/.test(v)))].sort();
-  const datasets = Object.entries(grouped).slice(0, 12).map(([label, vals]) => ({
-    label, data: years.map(y => vals[y] || 0), tension: 0.2
+  const datasets = Object.entries(byTransport).map(([label, vals]) => ({
+    label,
+    data: years.map(y => vals[y] ?? null),
+    tension: 0.2
   }));
 
   if(chart) chart.destroy();
@@ -225,7 +209,8 @@ function renderChart(){
     type: 'line',
     data: { labels: years, datasets },
     options: {
-      responsive: true, maintainAspectRatio: true,
+      responsive: true,
+      maintainAspectRatio: true,
       plugins: { legend: { position: 'bottom' } },
       interaction: { mode: 'nearest', intersect: false },
       scales: { y: { beginAtZero: false } }
@@ -234,15 +219,17 @@ function renderChart(){
 }
 
 function renderTable(){
-  const thead = els.table.querySelector('thead');
-  const tbody = els.table.querySelector('tbody');
   const cols = ['year','transport','goods','metric','unit','value'];
-  const names = {year:'Rok',transport:'Druh dopravy',goods:'Členění',metric:'Ukazatel',unit:'Jednotka',value:'Hodnota'};
-  thead.innerHTML = `<tr>${cols.map(c => `<th>${names[c]}</th>`).join('')}</tr>`;
-  tbody.innerHTML = filteredRows.slice(0,1000).map(r => `
+  const names = { year:'Rok', transport:'Druh dopravy', goods:'Členění', metric:'Ukazatel', unit:'Jednotka', value:'Hodnota' };
+  els.table.querySelector('thead').innerHTML = `<tr>${cols.map(c => `<th>${names[c]}</th>`).join('')}</tr>`;
+  els.table.querySelector('tbody').innerHTML = filteredRows.slice(0,1000).map(r => `
     <tr>
-      <td>${r.year ?? ''}</td><td>${r.transport ?? ''}</td><td>${r.goods ?? ''}</td>
-      <td>${r.metric ?? ''}</td><td>${r.unit ?? ''}</td><td>${r.value ?? ''}</td>
+      <td>${r.year}</td>
+      <td>${r.transport}</td>
+      <td>${r.goods}</td>
+      <td>${r.metric}</td>
+      <td>${r.unit}</td>
+      <td>${r.value}</td>
     </tr>
   `).join('');
 }
@@ -252,10 +239,9 @@ function exportCsv(){
   const header = ['Rok','Druh dopravy','Členění','Ukazatel','Jednotka','Hodnota'];
   const lines = [header.join(';')];
   filteredRows.forEach(r => {
-    const row = [r.year,r.transport,r.goods,r.metric,r.unit,r.value].map(v => `"${String(v ?? '').replace(/"/g,'""')}"`);
-    lines.push(row.join(';'));
+    lines.push([r.year,r.transport,r.goods,r.metric,r.unit,r.value].map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(';'));
   });
-  const blob = new Blob(["\ufeff" + lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const blob = new Blob(["\ufeff" + lines.join('\n')], {type: 'text/csv;charset=utf-8;'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'dopravni_dashboard_export.csv';
@@ -269,79 +255,40 @@ async function loadData(){
     const res = await fetch(els.dataUrl.value.trim());
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
+
     const parsed = Papa.parse(text, {
-  header: false,
-  skipEmptyLines: true
-});
-const rows = parsed.data;
-    if(rows.length < 2) throw new Error('CSV je prázdné.');
+      delimiter: ';',
+      skipEmptyLines: true,
+      quoteChar: '"'
+    });
 
-    const headers = rows[0].map(h => h.trim());
-    const dataRows = rows.slice(1);
+    const rows = parsed.data;
+    if(!rows || rows.length < 2) throw new Error('CSV je prázdné.');
 
-    let labelIdx = 0;
-    let valueIdx = headers.length - 1;
+    const dataRows = rows.slice(1); // přeskočí hlavičku
 
-    if(headers.length >= 2){
-      const numericScores = headers.map((h, idx) => {
-        let ok = 0, total = 0;
-        for(let i=0;i<Math.min(30, dataRows.length);i++){
-          const val = dataRows[i][idx];
-          if(String(val ?? '').trim() === '') continue;
-          total++;
-          if(toNumber(val) !== null) ok++;
-        }
-        return { idx, score: total ? ok / total : 0 };
-      }).sort((a,b) => b.score - a.score);
+    rawRows = dataRows.map(row => {
+      const label = row[0] || '';
+      const valueRaw = row[1] || '';
+      const p = parseCombinedLabel(label);
+      return {
+        year: p.year,
+        transport: p.transport,
+        goods: p.goods,
+        metric: p.metric,
+        unit: p.unit,
+        value: valueRaw,
+        valueNum: toNumber(valueRaw)
+      };
+    }).filter(r => r.year || r.transport || r.metric);
 
-      if(numericScores[0] && numericScores[0].score > 0.6) valueIdx = numericScores[0].idx;
-
-      const textScores = headers.map((h, idx) => {
-        if(idx === valueIdx) return { idx, score: -1 };
-        let sample = '';
-        for(let i=0;i<Math.min(30, dataRows.length);i++){
-          const val = String(dataRows[i][idx] ?? '').trim();
-          if(val){ sample = val; break; }
-        }
-        return { idx, score: sample.split(',').length + sample.length / 100 };
-      }).sort((a,b) => b.score - a.score);
-
-      if(textScores[0]) labelIdx = textScores[0].idx;
-    }
-
-   rawRows = dataRows.map(row => {
-
-  // spoj celý řádek zpět
-  const fullText = row.join(',');
-
-  // odděl hodnotu (poslední číslo za ;)
-  const partsSemi = fullText.split(';');
-  const label = partsSemi[0] || '';
-  const valueRaw = partsSemi[partsSemi.length - 1] || '';
-
-  const parts = label.split(',').map(s => s.trim());
-
-  const year = parts.find(p => /^\d{4}$/.test(p)) || '';
-
-  const transport = parts.find(p =>
-    p.includes('doprava') || p.includes('Potrubní')
-  ) || 'Neuvedeno';
-
-  const metric = parts[0] || '';
-
-  const unitMatch = metric.match(/\(([^)]+)\)/);
-  const unit = unitMatch ? unitMatch[1] : '';
-
-  return {
-    year,
-    transport,
-    goods: 'Celkem',
-    metric,
-    unit,
-    value: valueRaw,
-    valueNum: Number(valueRaw.replace(',', '.'))
-  };
-});
+    fillFilters();
+    applyFilters();
+    els.status.textContent = `Data načtena. Celkem ${rawRows.length} řádků.`;
+  } catch (err){
+    els.status.textContent = 'Nepodařilo se načíst data: ' + err.message;
+  }
+}
 
 els.loadBtn.addEventListener('click', loadData);
 els.exportBtn.addEventListener('click', exportCsv);
