@@ -333,17 +333,25 @@ async function loadData(){
     }
 
    rawRows = dataRows.map(row => {
-  const label = row[0] || '';
-  const valueRaw = row[row.length - 1] || '';
+
+  // spoj celý řádek zpět
+  const fullText = row.join(',');
+
+  // odděl hodnotu (poslední číslo za ;)
+  const partsSemi = fullText.split(';');
+  const label = partsSemi[0] || '';
+  const valueRaw = partsSemi[partsSemi.length - 1] || '';
 
   const parts = label.split(',').map(s => s.trim());
 
   const year = parts.find(p => /^\d{4}$/.test(p)) || '';
+
   const transport = parts.find(p =>
     p.includes('doprava') || p.includes('Potrubní')
   ) || 'Neuvedeno';
 
   const metric = parts[0] || '';
+
   const unitMatch = metric.match(/\(([^)]+)\)/);
   const unit = unitMatch ? unitMatch[1] : '';
 
@@ -354,7 +362,7 @@ async function loadData(){
     metric,
     unit,
     value: valueRaw,
-    valueNum: Number(valueRaw.toString().replace(',', '.'))
+    valueNum: Number(valueRaw.replace(',', '.'))
   };
 });
 
