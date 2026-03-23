@@ -332,28 +332,31 @@ async function loadData(){
       if(textScores[0]) labelIdx = textScores[0].idx;
     }
 
-    rawRows = dataRows.map(row => {
-      const label = row[labelIdx] || '';
-      const valueRaw = row[valueIdx] || '';
-      const parsed = parseCombinedLabel(label);
-      return {
-        year: parsed.year,
-        transport: parsed.transport || 'Neuvedeno',
-        goods: parsed.goods || 'Celkem',
-        metric: parsed.indicator || 'Neuvedeno',
-        unit: parsed.unit || '',
-        value: valueRaw,
-        valueNum: toNumber(valueRaw)
-      };
-    }).filter(r => r.metric || r.value || r.year);
+   rawRows = dataRows.map(row => {
+  const label = row[0] || '';
+  const valueRaw = row[row.length - 1] || '';
 
-    fillFilters();
-    applyFilters();
-    els.status.textContent = `Data načtena. Celkem ${rawRows.length} řádků.`;
-  }catch(err){
-    els.status.textContent = 'Nepodařilo se načíst data: ' + err.message;
-  }
-}
+  const parts = label.split(',').map(s => s.trim());
+
+  const year = parts.find(p => /^\d{4}$/.test(p)) || '';
+  const transport = parts.find(p =>
+    p.includes('doprava') || p.includes('Potrubní')
+  ) || 'Neuvedeno';
+
+  const metric = parts[0] || '';
+  const unitMatch = metric.match(/\(([^)]+)\)/);
+  const unit = unitMatch ? unitMatch[1] : '';
+
+  return {
+    year,
+    transport,
+    goods: 'Celkem',
+    metric,
+    unit,
+    value: valueRaw,
+    valueNum: Number(valueRaw.toString().replace(',', '.'))
+  };
+});
 
 els.loadBtn.addEventListener('click', loadData);
 els.exportBtn.addEventListener('click', exportCsv);
