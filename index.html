@@ -252,7 +252,7 @@ function exportCsv(){
 async function loadData(){
   try{
     els.status.textContent = 'Načítám data...';
-    const res = await fetch(els.dataUrl.value.trim());
+   const res = await fetch('data.csv');
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
 
