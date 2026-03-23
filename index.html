@@ -7,8 +7,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root{
-      --bg:#f6f7fb; --card:#ffffff; --text:#1f2937; --muted:#6b7280; --border:#e5e7eb;
-      --accent:#2563eb;
+      --bg:#f6f7fb; --card:#ffffff; --text:#1f2937; --muted:#6b7280; --border:#e5e7eb; --accent:#2563eb;
     }
     *{box-sizing:border-box}
     body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
@@ -17,30 +16,32 @@
     .sub{color:var(--muted);margin-bottom:18px}
     .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px}
     .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .span2{grid-column:span 2}
+    .span4{grid-column:1 / -1}
     label{display:block;font-size:14px;font-weight:700;margin-bottom:6px}
     select,input,button{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:14px}
     select[multiple]{height:150px}
     button{background:var(--accent);color:white;border:none;cursor:pointer;font-weight:700}
     button.secondary{background:#eef2ff;color:#1e3a8a}
-    .btns{display:flex;gap:10px;flex-wrap:wrap}
+    .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
     .btns a{display:inline-block;padding:10px 12px;border-radius:10px;text-decoration:none;border:1px solid var(--border);background:white;color:var(--text)}
     .table-wrap{overflow:auto;max-height:420px;border:1px solid var(--border);border-radius:10px}
     table{width:100%;border-collapse:collapse;font-size:13px}
     th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
     th{position:sticky;top:0;background:#f9fafb}
     .note{font-size:13px;color:var(--muted)}
-    @media (max-width: 900px){.grid{grid-template-columns:1fr 1fr}}
+    @media (max-width: 900px){.grid{grid-template-columns:1fr 1fr}.span2,.span4{grid-column:auto}}
     @media (max-width: 600px){.grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Nákladní doprava – jednoduchý dashboard</h1>
-    <div class="sub">Bez instalace. Otevři tento soubor v prohlížeči a klikni na „Načíst data“.</div>
+    <div class="sub">Verze upravená pro export z ČSÚ, kde jsou dimenze často sloučené do jednoho textového pole.</div>
 
     <div class="card">
       <div class="grid">
-        <div style="grid-column:1/-1">
+        <div class="span4">
           <label for="dataUrl">CSV adresa</label>
           <input id="dataUrl" value="https://data.csu.gov.cz/api/dotaz/v1/data/vybery/uzivatelske/5acca73e-6932-40b5-96f8-f4aa56e24dec?format=CSV" />
         </div>
@@ -60,12 +61,12 @@
           <label for="transport">Druh dopravy</label>
           <select id="transport" multiple></select>
         </div>
-        <div>
-          <label for="goods">Přepravované věci</label>
+        <div class="span2">
+          <label for="goods">Přepravované věci / další členění</label>
           <select id="goods" multiple></select>
         </div>
       </div>
-      <div class="btns" style="margin-top:14px">
+      <div class="btns">
         <button id="loadBtn">Načíst data</button>
         <button id="exportBtn" class="secondary" type="button">Export filtrovaného CSV</button>
         <a href="https://data.csu.gov.cz/datastat/data/VYBER/DOP04BT1?vSel=1" target="_blank">Otevřít DataStat</a>
@@ -105,25 +106,21 @@ const els = {
   table: document.getElementById('dataTable'),
 };
 
+const KNOWN_TRANSPORTS = [
+  'Nákladní doprava celkem',
+  'Železniční doprava',
+  'Silniční doprava',
+  'Letecká doprava',
+  'Vnitrozemská vodní doprava',
+  'Potrubní přeprava ropy',
+  'Potrubní přeprava zemního plynu',
+  'Potrubní doprava'
+];
+
 function normalize(str){
   return String(str ?? '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .toLowerCase().replace(/\s+/g,' ').trim();
-}
-
-function findColumn(headers, patterns){
-  const normalized = headers.map(h => ({raw:h, n:normalize(h)}));
-  for(const p of patterns){
-    const np = normalize(p);
-    const exact = normalized.find(h => h.n === np);
-    if(exact) return exact.raw;
-  }
-  for(const p of patterns){
-    const np = normalize(p);
-    const partial = normalized.find(h => h.n.includes(np));
-    if(partial) return partial.raw;
-  }
-  return null;
 }
 
 function parseCsv(text){
@@ -140,7 +137,7 @@ function parseCsv(text){
     } else if((c === '\n' || c === '\r') && !inQuotes){
       if(c === '\r' && next === '\n') i++;
       row.push(field);
-      if(row.some(v => String(v).length)) rows.push(row);
+      if(row.some(v => String(v).trim().length)) rows.push(row);
       row = []; field = '';
     } else {
       field += c;
@@ -180,19 +177,60 @@ function toNumber(val){
   return Number.isFinite(n) ? n : null;
 }
 
-function deriveColumns(headers){
-  return {
-    year: findColumn(headers, ['rok','referencni obdobi','obdobi','cas','čas','year']),
-    transport: findColumn(headers, ['druh dopravy','doprava','transport']),
-    goods: findColumn(headers, ['prepravovane veci','přepravované věci','veci','zbozi','zboží','komodita']),
-    metric: findColumn(headers, ['ukazatel','indikator','indikátor','mereni','měření','typ ukazatele']),
-    value: findColumn(headers, ['hodnota','value']),
-    unit: findColumn(headers, ['jednotka','unit']),
-  };
+function detectNumericColumn(headers, dataRows){
+  const scores = headers.map((h, idx) => {
+    let ok = 0, total = 0;
+    for(let i = 0; i < Math.min(50, dataRows.length); i++){
+      const cell = dataRows[i][idx];
+      if(String(cell ?? '').trim() === '') continue;
+      total++;
+      if(toNumber(cell) !== null) ok++;
+    }
+    return { header: h, idx, score: total ? ok / total : 0 };
+  });
+  scores.sort((a, b) => b.score - a.score);
+  return scores[0] && scores[0].score > 0.6 ? scores[0].header : headers[headers.length - 1];
+}
+
+function detectLabelColumn(headers, dataRows, valueHeader){
+  const idxValue = headers.indexOf(valueHeader);
+  const candidates = headers.filter((_, idx) => idx !== idxValue);
+  candidates.sort((a, b) => {
+    const ai = headers.indexOf(a), bi = headers.indexOf(b);
+    const aSample = dataRows.find(r => String(r[ai] ?? '').trim())?.[ai] || '';
+    const bSample = dataRows.find(r => String(r[bi] ?? '').trim())?.[bi] || '';
+    return String(bSample).length - String(aSample).length;
+  });
+  return candidates[0] || headers[0];
+}
+
+function parseCombinedLabel(label){
+  const parts = String(label || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  const yearIndex = parts.findIndex(p => /^\d{4}$/.test(p));
+  const year = yearIndex >= 0 ? parts[yearIndex] : '';
+
+  const transport = parts.find(p => KNOWN_TRANSPORTS.some(t => normalize(t) === normalize(p))) || '';
+
+  const indicator = parts[0] || '';
+  const unitMatch = indicator.match(/\(([^)]+)\)/);
+  const unit = unitMatch ? unitMatch[1] : '';
+
+  const skip = new Set([indicator, transport, year, 'Česko', 'Cesko']);
+  const extras = parts.filter(p => !skip.has(p) && !/^\d{4}$/.test(p) && normalize(p) !== 'cesko');
+
+  let goods = extras.join(' – ');
+  if(!goods && parts.length === 4) goods = 'Celkem';
+  if(!goods && parts.length > 4) goods = extras[0] || 'Celkem';
+
+  return { indicator, unit, year, transport, goods, rawLabel: label };
 }
 
 function fillFilters(){
-  const years = [...new Set(rawRows.map(r => r.year).filter(Boolean))].sort();
+  const years = [...new Set(rawRows.map(r => r.year).filter(v => /^\d{4}$/.test(String(v))))].sort();
   const metrics = [...new Set(rawRows.map(r => r.metric).filter(Boolean))].sort();
   const transports = [...new Set(rawRows.map(r => r.transport).filter(Boolean))].sort();
   const goods = [...new Set(rawRows.map(r => r.goods).filter(Boolean))].sort();
@@ -233,14 +271,14 @@ function applyFilters(){
 function renderChart(){
   const grouped = {};
   filteredRows.forEach(r => {
-    const label = [r.transport || 'Neuvedeno', r.goods || 'Neuvedeno'].join(' – ');
+    const label = r.transport || r.goods || 'Neuvedeno';
     const year = String(r.year || '');
     const val = r.valueNum ?? 0;
     if(!grouped[label]) grouped[label] = {};
     grouped[label][year] = (grouped[label][year] || 0) + val;
   });
 
-  const years = [...new Set(filteredRows.map(r => String(r.year)).filter(Boolean))].sort();
+  const years = [...new Set(filteredRows.map(r => String(r.year)).filter(v => /^\d{4}$/.test(v)))].sort();
   const datasets = Object.entries(grouped).slice(0, 12).map(([label, vals]) => ({
     label,
     data: years.map(y => vals[y] || 0),
@@ -254,13 +292,9 @@ function renderChart(){
     options: {
       responsive: true,
       maintainAspectRatio: true,
-      plugins: {
-        legend: { position: 'bottom' }
-      },
+      plugins: { legend: { position: 'bottom' } },
       interaction: { mode: 'nearest', intersect: false },
-      scales: {
-        y: { beginAtZero: false }
-      }
+      scales: { y: { beginAtZero: false } }
     }
   });
 }
@@ -270,7 +304,7 @@ function renderTable(){
   const tbody = els.table.querySelector('tbody');
   const cols = ['year','transport','goods','metric','unit','value'];
   const names = {
-    year:'Rok', transport:'Druh dopravy', goods:'Přepravované věci',
+    year:'Rok', transport:'Druh dopravy', goods:'Členění',
     metric:'Ukazatel', unit:'Jednotka', value:'Hodnota'
   };
 
@@ -289,10 +323,11 @@ function renderTable(){
 
 function exportCsv(){
   if(!filteredRows.length) return;
-  const header = ['Rok','Druh dopravy','Přepravované věci','Ukazatel','Jednotka','Hodnota'];
+  const header = ['Rok','Druh dopravy','Členění','Ukazatel','Jednotka','Hodnota'];
   const lines = [header.join(';')];
   filteredRows.forEach(r => {
-    const row = [r.year, r.transport, r.goods, r.metric, r.unit, r.value].map(v => `"${String(v ?? '').replace(/"/g,'""')}"`);
+    const row = [r.year, r.transport, r.goods, r.metric, r.unit, r.value]
+      .map(v => `"${String(v ?? '').replace(/"/g,'""')}"`);
     lines.push(row.join(';'));
   });
   const blob = new Blob(["\ufeff" + lines.join('\n')], {type: 'text/csv;charset=utf-8;'});
@@ -311,32 +346,34 @@ async function loadData(){
     const text = await res.text();
     const rows = parseCsv(text);
     if(rows.length < 2) throw new Error('CSV je prázdné.');
-    const headers = rows[0].map(h => h.trim());
-    const col = deriveColumns(headers);
 
-    rawRows = rows.slice(1).map(row => {
-      const obj = {};
-      headers.forEach((h, i) => obj[h] = row[i]);
+    const headers = rows[0].map(h => h.trim());
+    const dataRows = rows.slice(1);
+
+    const valueHeader = detectNumericColumn(headers, dataRows);
+    const labelHeader = detectLabelColumn(headers, dataRows, valueHeader);
+    const idxLabel = headers.indexOf(labelHeader);
+    const idxValue = headers.indexOf(valueHeader);
+
+    rawRows = dataRows.map(row => {
+      const label = row[idxLabel] || '';
+      const value = row[idxValue] || '';
+      const parsed = parseCombinedLabel(label);
       return {
-        year: obj[col.year] || '',
-        transport: obj[col.transport] || '',
-        goods: obj[col.goods] || '',
-        metric: obj[col.metric] || '',
-        unit: obj[col.unit] || '',
-        value: obj[col.value] || '',
-        valueNum: toNumber(obj[col.value]),
+        year: parsed.year,
+        transport: parsed.transport || 'Neuvedeno',
+        goods: parsed.goods || 'Celkem',
+        metric: parsed.indicator || 'Neuvedeno',
+        unit: parsed.unit || '',
+        value: value,
+        valueNum: toNumber(value),
+        rawLabel: parsed.rawLabel
       };
-    }).filter(r => r.year || r.transport || r.goods || r.metric || r.value);
+    }).filter(r => r.metric || r.value || r.year);
 
     fillFilters();
     applyFilters();
-
-    const missing = Object.entries(col).filter(([k,v]) => !v).map(([k]) => k);
-    if(missing.length){
-      els.status.textContent = 'Data načtena, ale některé sloupce nebyly rozpoznány: ' + missing.join(', ') + '.';
-    } else {
-      els.status.textContent = `Data načtena. Celkem ${rawRows.length} řádků.`;
-    }
+    els.status.textContent = `Data načtena. Celkem ${rawRows.length} řádků.`;
   }catch(err){
     els.status.textContent = 'Nepodařilo se načíst data: ' + err.message;
   }
@@ -351,7 +388,6 @@ els.exportBtn.addEventListener('click', exportCsv);
   els.transport.addEventListener(evt, applyFilters);
   els.goods.addEventListener(evt, applyFilters);
 });
-
 </script>
 </body>
 </html>
