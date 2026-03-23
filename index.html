@@ -1,30 +1,134 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
-  <meta charset="UTF-8">
-  <title>Nákladní doprava</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nákladní doprava – jednoduchý graf</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
-    body {
-      margin: 0;
-      font-family: Arial;
-      background: #f5f6fa;
-    }
-    h1 {
-      padding: 16px;
-      margin: 0;
-    }
-    iframe {
-      width: 100%;
-      height: 95vh;
-      border: none;
-    }
+    body{font-family:Arial,sans-serif;margin:0;background:#f5f6fa;color:#1f2937}
+    .wrap{max-width:1100px;margin:0 auto;padding:20px}
+    h1{margin:0 0 8px}
+    .sub{color:#6b7280;margin-bottom:16px}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    label{display:block;font-weight:700;font-size:14px;margin-bottom:6px}
+    select,button{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:10px;font-size:14px}
+    select[multiple]{height:180px}
+    button{background:#2563eb;color:#fff;border:none;cursor:pointer;font-weight:700}
+    .note{font-size:13px;color:#6b7280;margin-top:10px}
+    @media (max-width:700px){.grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
+<div class="wrap">
+  <h1>Nákladní doprava</h1>
+  <div class="sub">Jednoduchý graf z <strong>data.csv</strong> v GitHub repozitáři.</div>
 
-<h1>Nákladní doprava</h1>
+  <div class="card">
+    <div class="grid">
+      <div>
+        <label for="metric">Ukazatel</label>
+        <select id="metric"></select>
+      </div>
+      <div>
+        <label for="transport">Druh dopravy</label>
+        <select id="transport" multiple></select>
+      </div>
+    </div>
+    <div style="margin-top:12px;">
+      <button id="loadBtn">Načíst data</button>
+      <div class="note" id="status">Připraveno.</div>
+    </div>
+  </div>
 
-<iframe src="https://data.csu.gov.cz/compact/UZIVATELSKY_VYBER/5acca73e-6932-40b5-96f8-f4aa56e24dec"></iframe>
+  <div class="card">
+    <canvas id="chart" height="120"></canvas>
+  </div>
+</div>
 
+<script>
+let rows = [];
+let chart;
+
+const metricEl = document.getElementById('metric');
+const transportEl = document.getElementById('transport');
+const statusEl = document.getElementById('status');
+const loadBtn = document.getElementById('loadBtn');
+
+function toNumber(v){
+  const n = Number(String(v ?? '').replace(',', '.').trim());
+  return Number.isFinite(n) ? n : null;
+}
+
+function selectedValues(select){
+  return Array.from(select.selectedOptions).map(o => o.value);
+}
+
+function populateFilters(){
+  const metrics = [...new Set(rows.map(r => r.Ukazatel).filter(Boolean))];
+  const transports = [...new Set(rows.map(r => r["Druh dopravy"]).filter(Boolean))];
+
+  metricEl.innerHTML = metrics.map(m => `<option value="${m}">${m}</option>`).join('');
+  transportEl.innerHTML = transports.map(t => `<option value="${t}" selected>${t}</option>`).join('');
+}
+
+function drawChart(){
+  const metric = metricEl.value;
+  const transports = selectedValues(transportEl);
+
+  const filtered = rows.filter(r =>
+    r.Ukazatel === metric &&
+    transports.includes(r["Druh dopravy"])
+  );
+
+  const years = [...new Set(filtered.map(r => String(r.Roky)))].sort();
+  const datasets = transports.map(t => {
+    const vals = {};
+    filtered.filter(r => r["Druh dopravy"] === t).forEach(r => {
+      vals[String(r.Roky)] = toNumber(r.Hodnota);
+    });
+    return {
+      label: t,
+      data: years.map(y => vals[y] ?? null),
+      tension: 0.2
+    };
+  });
+
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('chart'), {
+    type: 'line',
+    data: { labels: years, datasets },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom' } },
+      interaction: { mode: 'nearest', intersect: false },
+      scales: { y: { beginAtZero: false } }
+    }
+  });
+
+  statusEl.textContent = `Načteno ${rows.length} řádků.`;
+}
+
+async function loadData(){
+  try {
+    statusEl.textContent = 'Načítám data...';
+    const res = await fetch('data.csv');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+    rows = parsed.data;
+    populateFilters();
+    drawChart();
+  } catch (e) {
+    statusEl.textContent = 'Chyba při načtení dat: ' + e.message;
+  }
+}
+
+loadBtn.addEventListener('click', loadData);
+metricEl.addEventListener('change', drawChart);
+transportEl.addEventListener('change', drawChart);
+</script>
 </body>
 </html>
