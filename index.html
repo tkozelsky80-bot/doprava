@@ -267,28 +267,28 @@ async function loadData(){
 
     const dataRows = rows.slice(1); // přeskočí hlavičku
 
-    rawRows = dataRows.map(row => {
-      const label = row[0] || '';
-      const valueRaw = row[1] || '';
-      const p = parseCombinedLabel(label);
-      return {
-        year: p.year,
-        transport: p.transport,
-        goods: p.goods,
-        metric: p.metric,
-        unit: p.unit,
-        value: valueRaw,
-        valueNum: toNumber(valueRaw)
-      };
-    }).filter(r => r.year || r.transport || r.metric);
+  rawRows = dataRows.map(row => {
 
-    fillFilters();
-    applyFilters();
-    els.status.textContent = `Data načtena. Celkem ${rawRows.length} řádků.`;
-  } catch (err){
-    els.status.textContent = 'Nepodařilo se načíst data: ' + err.message;
-  }
-}
+  const metric = row[0];
+  const country = row[1];
+  const year = row[2];
+  const transport = row[3];
+  const valueRaw = row[4];
+
+  const unitMatch = metric.match(/\(([^)]+)\)/);
+  const unit = unitMatch ? unitMatch[1] : '';
+
+  return {
+    year,
+    transport,
+    goods: 'Celkem',
+    metric,
+    unit,
+    value: valueRaw,
+    valueNum: Number(valueRaw.replace(',', '.'))
+  };
+
+}).filter(r => r.year && r.transport);
 
 els.loadBtn.addEventListener('click', loadData);
 els.exportBtn.addEventListener('click', exportCsv);
