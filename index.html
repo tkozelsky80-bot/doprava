@@ -6,92 +6,73 @@
   <title>Nákladní doprava – jednoduchý dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    :root{
-      --bg:#f6f7fb; --card:#ffffff; --text:#1f2937; --muted:#6b7280; --border:#e5e7eb; --accent:#2563eb;
-    }
-    *{box-sizing:border-box}
-    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
-    .wrap{max-width:1200px;margin:0 auto;padding:20px}
-    h1{margin:0 0 8px 0;font-size:30px}
-    .sub{color:var(--muted);margin-bottom:18px}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px}
-    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-    .span2{grid-column:span 2}
-    .span4{grid-column:1 / -1}
+    :root{--bg:#f6f7fb;--card:#fff;--text:#1f2937;--muted:#6b7280;--border:#e5e7eb;--accent:#2563eb}
+    *{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+    .wrap{max-width:1200px;margin:0 auto;padding:20px} h1{margin:0 0 8px;font-size:30px}
+    .sub{color:var(--muted);margin-bottom:18px} .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px}
+    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.span2{grid-column:span 2}.span4{grid-column:1/-1}
     label{display:block;font-size:14px;font-weight:700;margin-bottom:6px}
     select,input,button{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:14px}
-    select[multiple]{height:150px}
-    button{background:var(--accent);color:white;border:none;cursor:pointer;font-weight:700}
-    button.secondary{background:#eef2ff;color:#1e3a8a}
-    .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
-    .btns a{display:inline-block;padding:10px 12px;border-radius:10px;text-decoration:none;border:1px solid var(--border);background:white;color:var(--text)}
+    select[multiple]{height:150px} button{background:var(--accent);color:#fff;border:none;cursor:pointer;font-weight:700}
+    button.secondary{background:#eef2ff;color:#1e3a8a} .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+    .btns a{display:inline-block;padding:10px 12px;border-radius:10px;text-decoration:none;border:1px solid var(--border);background:#fff;color:var(--text)}
     .table-wrap{overflow:auto;max-height:420px;border:1px solid var(--border);border-radius:10px}
-    table{width:100%;border-collapse:collapse;font-size:13px}
-    th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
-    th{position:sticky;top:0;background:#f9fafb}
-    .note{font-size:13px;color:var(--muted)}
-    @media (max-width: 900px){.grid{grid-template-columns:1fr 1fr}.span2,.span4{grid-column:auto}}
-    @media (max-width: 600px){.grid{grid-template-columns:1fr}}
+    table{width:100%;border-collapse:collapse;font-size:13px} th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+    th{position:sticky;top:0;background:#f9fafb}.note{font-size:13px;color:var(--muted)}
+    @media (max-width:900px){.grid{grid-template-columns:1fr 1fr}.span2,.span4{grid-column:auto}}
+    @media (max-width:600px){.grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Nákladní doprava – jednoduchý dashboard</h1>
-    <div class="sub">Verze upravená pro export z ČSÚ, kde jsou dimenze často sloučené do jednoho textového pole.</div>
+<div class="wrap">
+  <h1>Nákladní doprava – jednoduchý dashboard</h1>
+  <div class="sub">Opravená verze s automatickým rozpoznáním CSV oddělovače.</div>
 
-    <div class="card">
-      <div class="grid">
-        <div class="span4">
-          <label for="dataUrl">CSV adresa</label>
-          <input id="dataUrl" value="https://data.csu.gov.cz/api/dotaz/v1/data/vybery/uzivatelske/5acca73e-6932-40b5-96f8-f4aa56e24dec?format=CSV" />
-        </div>
-        <div>
-          <label for="yearFrom">Rok od</label>
-          <select id="yearFrom"></select>
-        </div>
-        <div>
-          <label for="yearTo">Rok do</label>
-          <select id="yearTo"></select>
-        </div>
-        <div>
-          <label for="metric">Ukazatel</label>
-          <select id="metric"></select>
-        </div>
-        <div>
-          <label for="transport">Druh dopravy</label>
-          <select id="transport" multiple></select>
-        </div>
-        <div class="span2">
-          <label for="goods">Přepravované věci / další členění</label>
-          <select id="goods" multiple></select>
-        </div>
+  <div class="card">
+    <div class="grid">
+      <div class="span4">
+        <label for="dataUrl">CSV adresa</label>
+        <input id="dataUrl" value="https://data.csu.gov.cz/api/dotaz/v1/data/vybery/uzivatelske/5acca73e-6932-40b5-96f8-f4aa56e24dec?format=CSV" />
       </div>
-      <div class="btns">
-        <button id="loadBtn">Načíst data</button>
-        <button id="exportBtn" class="secondary" type="button">Export filtrovaného CSV</button>
-        <a href="https://data.csu.gov.cz/datastat/data/VYBER/DOP04BT1?vSel=1" target="_blank">Otevřít DataStat</a>
+      <div>
+        <label for="yearFrom">Rok od</label>
+        <select id="yearFrom"></select>
       </div>
-      <p class="note" id="status">Připraveno.</p>
-    </div>
-
-    <div class="card">
-      <canvas id="chart" height="110"></canvas>
-    </div>
-
-    <div class="card">
-      <div class="table-wrap">
-        <table id="dataTable">
-          <thead></thead>
-          <tbody></tbody>
-        </table>
+      <div>
+        <label for="yearTo">Rok do</label>
+        <select id="yearTo"></select>
+      </div>
+      <div>
+        <label for="metric">Ukazatel</label>
+        <select id="metric"></select>
+      </div>
+      <div>
+        <label for="transport">Druh dopravy</label>
+        <select id="transport" multiple></select>
+      </div>
+      <div class="span2">
+        <label for="goods">Přepravované věci / další členění</label>
+        <select id="goods" multiple></select>
       </div>
     </div>
+    <div class="btns">
+      <button id="loadBtn">Načíst data</button>
+      <button id="exportBtn" class="secondary" type="button">Export filtrovaného CSV</button>
+      <a href="https://data.csu.gov.cz/datastat/data/VYBER/DOP04BT1?vSel=1" target="_blank">Otevřít DataStat</a>
+    </div>
+    <p class="note" id="status">Připraveno.</p>
   </div>
 
+  <div class="card"><canvas id="chart" height="110"></canvas></div>
+  <div class="card">
+    <div class="table-wrap">
+      <table id="dataTable"><thead></thead><tbody></tbody></table>
+    </div>
+  </div>
+</div>
+
 <script>
-let rawRows = [];
-let filteredRows = [];
-let chart;
+let rawRows = [], filteredRows = [], chart;
 
 const els = {
   dataUrl: document.getElementById('dataUrl'),
@@ -107,32 +88,41 @@ const els = {
 };
 
 const KNOWN_TRANSPORTS = [
-  'Nákladní doprava celkem',
-  'Železniční doprava',
-  'Silniční doprava',
-  'Letecká doprava',
-  'Vnitrozemská vodní doprava',
-  'Potrubní přeprava ropy',
-  'Potrubní přeprava zemního plynu',
-  'Potrubní doprava'
+  'Nákladní doprava celkem','Železniční doprava','Silniční doprava','Letecká doprava',
+  'Vnitrozemská vodní doprava','Potrubní přeprava ropy','Potrubní přeprava zemního plynu','Potrubní doprava'
 ];
 
 function normalize(str){
-  return String(str ?? '')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .toLowerCase().replace(/\s+/g,' ').trim();
+  return String(str ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+}
+
+function detectDelimiter(text){
+  const firstLine = text.split(/\r?\n/).find(line => line.trim()) || '';
+  const candidates = [',',';','\t'];
+  let best = ',', bestCount = -1;
+  for(const d of candidates){
+    let count = 0, inQuotes = false;
+    for(let i=0;i<firstLine.length;i++){
+      const c = firstLine[i];
+      if(c === '"') inQuotes = !inQuotes;
+      else if(c === d && !inQuotes) count++;
+    }
+    if(count > bestCount){ best = d; bestCount = count; }
+  }
+  return best;
 }
 
 function parseCsv(text){
+  const delimiter = detectDelimiter(text);
   const rows = [];
   let row = [], field = '', inQuotes = false;
+
   for(let i=0;i<text.length;i++){
-    const c = text[i];
-    const next = text[i+1];
+    const c = text[i], next = text[i+1];
     if(c === '"'){
       if(inQuotes && next === '"'){ field += '"'; i++; }
       else inQuotes = !inQuotes;
-    } else if(c === ';' && !inQuotes){
+    } else if(c === delimiter && !inQuotes){
       row.push(field); field = '';
     } else if((c === '\n' || c === '\r') && !inQuotes){
       if(c === '\r' && next === '\n') i++;
@@ -145,7 +135,7 @@ function parseCsv(text){
   }
   if(field.length || row.length){
     row.push(field);
-    rows.push(row);
+    if(row.some(v => String(v).trim().length)) rows.push(row);
   }
   return rows;
 }
@@ -154,14 +144,12 @@ function populateSelect(select, values, multiple=false, includeAll=true){
   select.innerHTML = '';
   if(includeAll && !multiple){
     const opt = document.createElement('option');
-    opt.value = '__ALL__';
-    opt.textContent = 'Vše';
+    opt.value = '__ALL__'; opt.textContent = 'Vše';
     select.appendChild(opt);
   }
   values.forEach(v => {
     const opt = document.createElement('option');
-    opt.value = v;
-    opt.textContent = v;
+    opt.value = v; opt.textContent = v;
     if(multiple) opt.selected = true;
     select.appendChild(opt);
   });
@@ -172,64 +160,37 @@ function selectedValues(select){
 }
 
 function toNumber(val){
-  const s = String(val ?? '').replace(/\s/g,'').replace(',', '.');
+  if(val === null || val === undefined) return null;
+  const s = String(val).trim().replace(/\u00A0/g,' ').replace(/\s/g,'').replace(',', '.');
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
 }
 
-function detectNumericColumn(headers, dataRows){
-  const scores = headers.map((h, idx) => {
-    let ok = 0, total = 0;
-    for(let i = 0; i < Math.min(50, dataRows.length); i++){
-      const cell = dataRows[i][idx];
-      if(String(cell ?? '').trim() === '') continue;
-      total++;
-      if(toNumber(cell) !== null) ok++;
-    }
-    return { header: h, idx, score: total ? ok / total : 0 };
-  });
-  scores.sort((a, b) => b.score - a.score);
-  return scores[0] && scores[0].score > 0.6 ? scores[0].header : headers[headers.length - 1];
-}
-
-function detectLabelColumn(headers, dataRows, valueHeader){
-  const idxValue = headers.indexOf(valueHeader);
-  const candidates = headers.filter((_, idx) => idx !== idxValue);
-  candidates.sort((a, b) => {
-    const ai = headers.indexOf(a), bi = headers.indexOf(b);
-    const aSample = dataRows.find(r => String(r[ai] ?? '').trim())?.[ai] || '';
-    const bSample = dataRows.find(r => String(r[bi] ?? '').trim())?.[bi] || '';
-    return String(bSample).length - String(aSample).length;
-  });
-  return candidates[0] || headers[0];
-}
-
 function parseCombinedLabel(label){
-  const parts = String(label || '')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean);
-// odstranění poslední části pokud je to číslo (hodnota)
-if (parts.length > 0 && !isNaN(parts[parts.length - 1].replace(',', '.'))) {
-  parts.pop();
-}
+  let parts = String(label || '').split(',').map(s => s.trim()).filter(Boolean);
+
+  const last = parts[parts.length - 1] || '';
+  if(toNumber(last) !== null) parts = parts.slice(0, -1);
+
   const yearIndex = parts.findIndex(p => /^\d{4}$/.test(p));
   const year = yearIndex >= 0 ? parts[yearIndex] : '';
-
   const transport = parts.find(p => KNOWN_TRANSPORTS.some(t => normalize(t) === normalize(p))) || '';
-
   const indicator = parts[0] || '';
   const unitMatch = indicator.match(/\(([^)]+)\)/);
   const unit = unitMatch ? unitMatch[1] : '';
 
-  const skip = new Set([indicator, transport, year, 'Česko', 'Cesko']);
-  const extras = parts.filter(p => !skip.has(p) && !/^\d{4}$/.test(p) && normalize(p) !== 'cesko');
+  const extras = parts.filter(p =>
+    p !== indicator &&
+    p !== transport &&
+    p !== year &&
+    normalize(p) !== 'cesko' &&
+    normalize(p) !== 'česko'
+  );
 
   let goods = extras.join(' – ');
-  if(!goods && parts.length === 4) goods = 'Celkem';
-  if(!goods && parts.length > 4) goods = extras[0] || 'Celkem';
+  if(!goods) goods = 'Celkem';
 
-  return { indicator, unit, year, transport, goods, rawLabel: label };
+  return { indicator, unit, year, transport, goods };
 }
 
 function fillFilters(){
@@ -283,9 +244,7 @@ function renderChart(){
 
   const years = [...new Set(filteredRows.map(r => String(r.year)).filter(v => /^\d{4}$/.test(v)))].sort();
   const datasets = Object.entries(grouped).slice(0, 12).map(([label, vals]) => ({
-    label,
-    data: years.map(y => vals[y] || 0),
-    tension: 0.2
+    label, data: years.map(y => vals[y] || 0), tension: 0.2
   }));
 
   if(chart) chart.destroy();
@@ -293,8 +252,7 @@ function renderChart(){
     type: 'line',
     data: { labels: years, datasets },
     options: {
-      responsive: true,
-      maintainAspectRatio: true,
+      responsive: true, maintainAspectRatio: true,
       plugins: { legend: { position: 'bottom' } },
       interaction: { mode: 'nearest', intersect: false },
       scales: { y: { beginAtZero: false } }
@@ -306,20 +264,12 @@ function renderTable(){
   const thead = els.table.querySelector('thead');
   const tbody = els.table.querySelector('tbody');
   const cols = ['year','transport','goods','metric','unit','value'];
-  const names = {
-    year:'Rok', transport:'Druh dopravy', goods:'Členění',
-    metric:'Ukazatel', unit:'Jednotka', value:'Hodnota'
-  };
-
+  const names = {year:'Rok',transport:'Druh dopravy',goods:'Členění',metric:'Ukazatel',unit:'Jednotka',value:'Hodnota'};
   thead.innerHTML = `<tr>${cols.map(c => `<th>${names[c]}</th>`).join('')}</tr>`;
-  tbody.innerHTML = filteredRows.slice(0, 1000).map(r => `
+  tbody.innerHTML = filteredRows.slice(0,1000).map(r => `
     <tr>
-      <td>${r.year ?? ''}</td>
-      <td>${r.transport ?? ''}</td>
-      <td>${r.goods ?? ''}</td>
-      <td>${r.metric ?? ''}</td>
-      <td>${r.unit ?? ''}</td>
-      <td>${r.value ?? ''}</td>
+      <td>${r.year ?? ''}</td><td>${r.transport ?? ''}</td><td>${r.goods ?? ''}</td>
+      <td>${r.metric ?? ''}</td><td>${r.unit ?? ''}</td><td>${r.value ?? ''}</td>
     </tr>
   `).join('');
 }
@@ -329,11 +279,10 @@ function exportCsv(){
   const header = ['Rok','Druh dopravy','Členění','Ukazatel','Jednotka','Hodnota'];
   const lines = [header.join(';')];
   filteredRows.forEach(r => {
-    const row = [r.year, r.transport, r.goods, r.metric, r.unit, r.value]
-      .map(v => `"${String(v ?? '').replace(/"/g,'""')}"`);
+    const row = [r.year,r.transport,r.goods,r.metric,r.unit,r.value].map(v => `"${String(v ?? '').replace(/"/g,'""')}"`);
     lines.push(row.join(';'));
   });
-  const blob = new Blob(["\ufeff" + lines.join('\n')], {type: 'text/csv;charset=utf-8;'});
+  const blob = new Blob(["\ufeff" + lines.join('\n')], {type:'text/csv;charset=utf-8;'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'dopravni_dashboard_export.csv';
@@ -353,15 +302,39 @@ async function loadData(){
     const headers = rows[0].map(h => h.trim());
     const dataRows = rows.slice(1);
 
-    // pevné nastavení pro ČSÚ export
-const labelHeader = headers[0]; // první sloupec = text
-const valueHeader = headers[headers.length - 1]; // poslední = hodnota
-    const idxLabel = headers.indexOf(labelHeader);
-    const idxValue = headers.indexOf(valueHeader);
+    let labelIdx = 0;
+    let valueIdx = headers.length - 1;
+
+    if(headers.length >= 2){
+      const numericScores = headers.map((h, idx) => {
+        let ok = 0, total = 0;
+        for(let i=0;i<Math.min(30, dataRows.length);i++){
+          const val = dataRows[i][idx];
+          if(String(val ?? '').trim() === '') continue;
+          total++;
+          if(toNumber(val) !== null) ok++;
+        }
+        return { idx, score: total ? ok / total : 0 };
+      }).sort((a,b) => b.score - a.score);
+
+      if(numericScores[0] && numericScores[0].score > 0.6) valueIdx = numericScores[0].idx;
+
+      const textScores = headers.map((h, idx) => {
+        if(idx === valueIdx) return { idx, score: -1 };
+        let sample = '';
+        for(let i=0;i<Math.min(30, dataRows.length);i++){
+          const val = String(dataRows[i][idx] ?? '').trim();
+          if(val){ sample = val; break; }
+        }
+        return { idx, score: sample.split(',').length + sample.length / 100 };
+      }).sort((a,b) => b.score - a.score);
+
+      if(textScores[0]) labelIdx = textScores[0].idx;
+    }
 
     rawRows = dataRows.map(row => {
-      const label = row[idxLabel] || '';
-      const value = row[idxValue] || '';
+      const label = row[labelIdx] || '';
+      const valueRaw = row[valueIdx] || '';
       const parsed = parseCombinedLabel(label);
       return {
         year: parsed.year,
@@ -369,9 +342,8 @@ const valueHeader = headers[headers.length - 1]; // poslední = hodnota
         goods: parsed.goods || 'Celkem',
         metric: parsed.indicator || 'Neuvedeno',
         unit: parsed.unit || '',
-        value: value,
-        valueNum: toNumber(value),
-        rawLabel: parsed.rawLabel
+        value: valueRaw,
+        valueNum: toNumber(valueRaw)
       };
     }).filter(r => r.metric || r.value || r.year);
 
