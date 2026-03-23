@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Nákladní doprava – jednoduchý dashboard</title>
@@ -110,34 +111,6 @@ function detectDelimiter(text){
     if(count > bestCount){ best = d; bestCount = count; }
   }
   return best;
-}
-
-function parseCsv(text){
-  const delimiter = detectDelimiter(text);
-  const rows = [];
-  let row = [], field = '', inQuotes = false;
-
-  for(let i=0;i<text.length;i++){
-    const c = text[i], next = text[i+1];
-    if(c === '"'){
-      if(inQuotes && next === '"'){ field += '"'; i++; }
-      else inQuotes = !inQuotes;
-    } else if(c === delimiter && !inQuotes){
-      row.push(field); field = '';
-    } else if((c === '\n' || c === '\r') && !inQuotes){
-      if(c === '\r' && next === '\n') i++;
-      row.push(field);
-      if(row.some(v => String(v).trim().length)) rows.push(row);
-      row = []; field = '';
-    } else {
-      field += c;
-    }
-  }
-  if(field.length || row.length){
-    row.push(field);
-    if(row.some(v => String(v).trim().length)) rows.push(row);
-  }
-  return rows;
 }
 
 function populateSelect(select, values, multiple=false, includeAll=true){
@@ -296,7 +269,11 @@ async function loadData(){
     const res = await fetch(els.dataUrl.value.trim());
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
-    const rows = parseCsv(text);
+    const parsed = Papa.parse(text, {
+  header: false,
+  skipEmptyLines: true
+});
+const rows = parsed.data;
     if(rows.length < 2) throw new Error('CSV je prázdné.');
 
     const headers = rows[0].map(h => h.trim());
