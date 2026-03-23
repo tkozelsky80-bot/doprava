@@ -209,7 +209,10 @@ function parseCombinedLabel(label){
     .split(',')
     .map(s => s.trim())
     .filter(Boolean);
-
+// odstranění poslední části pokud je to číslo (hodnota)
+if (parts.length > 0 && !isNaN(parts[parts.length - 1].replace(',', '.'))) {
+  parts.pop();
+}
   const yearIndex = parts.findIndex(p => /^\d{4}$/.test(p));
   const year = yearIndex >= 0 ? parts[yearIndex] : '';
 
