@@ -353,8 +353,9 @@ async function loadData(){
     const headers = rows[0].map(h => h.trim());
     const dataRows = rows.slice(1);
 
-    const valueHeader = detectNumericColumn(headers, dataRows);
-    const labelHeader = detectLabelColumn(headers, dataRows, valueHeader);
+    // pevné nastavení pro ČSÚ export
+const labelHeader = headers[0]; // první sloupec = text
+const valueHeader = headers[headers.length - 1]; // poslední = hodnota
     const idxLabel = headers.indexOf(labelHeader);
     const idxValue = headers.indexOf(valueHeader);
 
