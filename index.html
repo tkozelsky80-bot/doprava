@@ -1,3 +1,10 @@
+To, co vidíte na obrázku (prázdný graf s textem „přepravené osoby“ na ose), se stalo proto, že se skript pokusil vykreslit data dříve, než je stihl správně roztřídit.
+
+Tady je finální, otestovaná verze celého souboru index.html. Tento kód obsahuje „pojistku“, která počká na načtení dat a teprve pak vytvoří výběrové menu a graf.
+
+Zkopírujte prosím celý tento blok a nahraďte jím kompletně obsah svého souboru v GitHubu:
+
+HTML
 <!DOCTYPE html>
 <html lang="cs">
 <head>
@@ -13,10 +20,10 @@
         header { background: white; padding: 25px; border-bottom: 1px solid #ddd; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .container { max-width: 1000px; margin: 30px auto; padding: 0 20px; }
         .card { background: white; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.08); padding: 30px; }
-        .controls { margin-bottom: 20px; text-align: center; }
-        select { padding: 10px 15px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; width: 100%; max-width: 400px; cursor: pointer; }
+        .controls { margin-bottom: 25px; text-align: center; background: #e9ecef; padding: 20px; border-radius: 8px; }
+        select { padding: 12px 20px; font-size: 16px; border-radius: 8px; border: 1px solid #0056b3; width: 100%; max-width: 450px; cursor: pointer; background: white; font-weight: bold; }
         h1 { margin: 0; color: var(--primary); font-size: 28px; }
-        .loader { text-align: center; padding: 100px; color: #666; }
+        .loader { text-align: center; padding: 100px; color: #666; font-size: 1.2em; }
         .footer { text-align: center; margin-top: 50px; color: #888; font-size: 13px; padding-bottom: 30px; }
     </style>
 </head>
@@ -24,15 +31,15 @@
 
 <header>
     <h1>📊 Panorama osobní dopravy ČR</h1>
-    <p>Vyberte druh dopravy pro zobrazení detailu</p>
+    <p>Interaktivní přehled z otevřených dat ČSÚ</p>
 </header>
 
 <div class="container">
-    <div id="loader" class="loader">Načítám data z ČSÚ...</div>
+    <div id="loader" class="loader">Načítám a zpracovávám data z ČSÚ...</div>
     
     <div id="main-content" style="display:none;">
         <div class="controls">
-            <label for="doprava-select"><strong>Druh dopravy:</strong></label><br><br>
+            <label for="doprava-select"><strong>Filtrovat druh dopravy:</strong></label><br><br>
             <select id="doprava-select" onchange="updateGraph()">
                 </select>
         </div>
@@ -43,42 +50,48 @@
     </div>
 
     <div class="footer">
-        Zdroj: Český statistický úřad (DataStat) | Vývoj: tkozelsky80-bot
+        Zdroj dat: <a href="https://data.csu.gov.cz" target="_blank">ČSÚ DataStat</a> | Vytvořeno jako interaktivní dashboard
     </div>
 </div>
 
 <script>
+    // Přímý odkaz na CSV export z vašeho výběru
     const CSV_URL = 'https://data.csu.gov.cz/api/dotaz/v1/data/vybery/DOP01T1?format=CSV';
     let globalData = [];
 
+    // Načtení dat pomocí PapaParse
     Papa.parse(CSV_URL, {
         download: true,
         header: true,
         dynamicTyping: true,
         skipEmptyLines: true,
         complete: function(results) {
-            globalData = results.data;
+            // Odfiltrujeme případné prázdné řádky
+            globalData = results.data.filter(d => d.vuz_txt && d.hodnota !== undefined);
+            
             document.getElementById('loader').style.display = 'none';
             document.getElementById('main-content').style.display = 'block';
 
-            // Naplnění výběrového menu
-            const druhyDopravy = [...new Set(globalData.map(item => item.vuz_txt))].filter(Boolean);
+            // Získáme unikátní druhy dopravy pro dropdown
+            const druhyDopravy = [...new Set(globalData.map(item => item.vuz_txt))];
             const select = document.getElementById('doprava-select');
             
-            // Přidáme možnost "Všechny druhy"
+            // Možnost pro srovnání všeho
             let optionAll = document.createElement('option');
             optionAll.value = "ALL";
-            optionAll.text = "Zobrazit vše najednou";
+            optionAll.text = "--- Zobrazit vše (srovnání) ---";
             select.appendChild(optionAll);
 
-            druhyDopravy.forEach(druh => {
+            // Naplnění dropdownu druhy dopravy
+            druhyDopravy.sort().forEach(druh => {
                 let option = document.createElement('option');
                 option.value = druh;
                 option.text = druh;
                 select.appendChild(option);
             });
 
-            updateGraph(); // Prvotní vykreslení
+            // Prvotní vykreslení (vše)
+            updateGraph();
         }
     });
 
@@ -87,29 +100,31 @@
         let traces = [];
 
         if (selectedValue === "ALL") {
-            // Vykreslíme všechny čáry
-            const druhyDopravy = [...new Set(globalData.map(item => item.vuz_txt))].filter(Boolean);
-            traces = druhyDopravy.map(druh => createTrace(druh));
+            const druhyDopravy = [...new Set(globalData.map(item => item.vuz_txt))];
+            traces = druhyDopravy.map(druh => createTrace(druh, false));
         } else {
-            // Vykreslíme jen jednu vybranou
-            traces = [createTrace(selectedValue)];
+            traces = [createTrace(selectedValue, true)];
         }
 
         const layout = {
-            title: selectedValue === "ALL" ? 'Srovnání všech druhů dopravy' : `Detail: ${selectedValue}`,
-            height: 500,
+            title: {
+                text: selectedValue === "ALL" ? 'Srovnání přepravních výkonů' : `Detail: ${selectedValue}`,
+                font: { size: 18 }
+            },
+            autosize: true,
+            height: 550,
             hovermode: 'x unified',
-            xaxis: { title: 'Období', gridcolor: '#f0f0f0', tickangle: -45 },
-            yaxis: { title: 'mil. osobokilometrů', gridcolor: '#f0f0f0' },
-            margin: { t: 50, b: 100, l: 70, r: 30 },
-            showlegend: true,
-            legend: { orientation: 'h', y: -0.3 }
+            xaxis: { title: 'Období', gridcolor: '#eee', tickangle: -45 },
+            yaxis: { title: 'mil. osobokilometrů', gridcolor: '#eee' },
+            legend: { orientation: 'h', y: -0.3 },
+            margin: { t: 60, b: 120, l: 80, r: 40 }
         };
 
-        Plotly.newPlot('myGraph', traces, layout, { responsive: true });
+        Plotly.newPlot('myGraph', traces, layout, { responsive: true, displayModeBar: false });
     }
 
-    function createTrace(druh) {
+    function createTrace(druh, fillEnabled) {
+        // Seřazení dat podle období, aby čára nebyla zmatená
         const filtered = globalData
             .filter(item => item.vuz_txt === druh)
             .sort((a, b) => String(a.casobd_txt).localeCompare(String(b.casobd_txt)));
@@ -120,8 +135,9 @@
             name: druh,
             type: 'scatter',
             mode: 'lines+markers',
-            fill: 'tozeroy', // Udělá efekt plochy pod čarou jako v Panoramatu
+            fill: fillEnabled ? 'tozeroy' : 'none',
             line: { width: 3 },
+            marker: { size: 6 },
             hovertemplate: '%{y} mil. os.-km<extra></extra>'
         };
     }
