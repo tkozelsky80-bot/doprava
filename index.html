@@ -48,34 +48,41 @@
 </div>
 
 <script>
-    // Přímý odkaz na CSV export z vašeho výběru
     const CSV_URL = 'https://data.csu.gov.cz/api/dotaz/v1/data/vybery/DOP01T1?format=CSV';
     let globalData = [];
 
-    // Načtení dat pomocí PapaParse
     Papa.parse(CSV_URL, {
         download: true,
         header: true,
+        delimiter: ";", // KLÍČOVÁ ZMĚNA: ČSÚ používá středníky
         dynamicTyping: true,
         skipEmptyLines: true,
+        encoding: "UTF-8",
         complete: function(results) {
-            // Odfiltrujeme případné prázdné řádky
+            console.log("Surová data:", results.data); // Pro kontrolu v konzoli prohlížeče
+            
+            // Vyčištění dat - ujistíme se, že máme sloupce, které potřebujeme
             globalData = results.data.filter(d => d.vuz_txt && d.hodnota !== undefined);
             
+            if (globalData.length === 0) {
+                document.getElementById('loader').innerHTML = "⚠️ Data se nepodařilo správně zpracovat. Zkontrolujte formát CSV.";
+                return;
+            }
+
             document.getElementById('loader').style.display = 'none';
             document.getElementById('main-content').style.display = 'block';
 
-            // Získáme unikátní druhy dopravy pro dropdown
             const druhyDopravy = [...new Set(globalData.map(item => item.vuz_txt))];
             const select = document.getElementById('doprava-select');
             
-            // Možnost pro srovnání všeho
+            // Vyčištění selectu před naplněním
+            select.innerHTML = "";
+            
             let optionAll = document.createElement('option');
             optionAll.value = "ALL";
-            optionAll.text = "--- Zobrazit vše (srovnání) ---";
+            optionAll.text = "--- Zobrazit vše najednou ---";
             select.appendChild(optionAll);
 
-            // Naplnění dropdownu druhy dopravy
             druhyDopravy.sort().forEach(druh => {
                 let option = document.createElement('option');
                 option.value = druh;
@@ -83,10 +90,52 @@
                 select.appendChild(option);
             });
 
-            // Prvotní vykreslení (vše)
             updateGraph();
         }
     });
+
+    function updateGraph() {
+        const selectedValue = document.getElementById('doprava-select').value;
+        let traces = [];
+
+        if (selectedValue === "ALL") {
+            const druhyDopravy = [...new Set(globalData.map(item => item.vuz_txt))];
+            traces = druhyDopravy.map(druh => createTrace(druh, false));
+        } else {
+            traces = [createTrace(selectedValue, true)];
+        }
+
+        const layout = {
+            title: { text: selectedValue === "ALL" ? 'Srovnání všech druhů dopravy' : `Detail: ${selectedValue}` },
+            height: 500,
+            hovermode: 'x unified',
+            xaxis: { title: 'Období', tickangle: -45, gridcolor: '#eee' },
+            yaxis: { title: 'mil. osobokilometrů', gridcolor: '#eee' },
+            legend: { orientation: 'h', y: -0.3 },
+            margin: { t: 50, b: 120, l: 80, r: 30 }
+        };
+
+        Plotly.newPlot('myGraph', traces, layout, { responsive: true });
+    }
+
+    function createTrace(druh, fillEnabled) {
+        const filtered = globalData
+            .filter(item => item.vuz_txt === druh)
+            // Seřazení podle času (např. 2021, 2022...)
+            .sort((a, b) => String(a.casobd_txt).localeCompare(String(b.casobd_txt), undefined, {numeric: true}));
+
+        return {
+            x: filtered.map(d => d.casobd_txt),
+            y: filtered.map(d => d.hodnota),
+            name: druh,
+            type: 'scatter',
+            mode: 'lines+markers',
+            fill: fillEnabled ? 'tozeroy' : 'none',
+            line: { width: 3 },
+            hovertemplate: '%{y} mil. os.-km<extra></extra>'
+        };
+    }
+</script>
 
     function updateGraph() {
         const selectedValue = document.getElementById('doprava-select').value;
