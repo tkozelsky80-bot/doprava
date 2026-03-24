@@ -1,228 +1,93 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Nákladní doprava</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      background: #f5f6fa;
-      color: #1f2937;
-    }
-    .wrap {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-    h1 {
-      margin: 0 0 8px;
-    }
-    .sub {
-      color: #6b7280;
-      margin-bottom: 16px;
-    }
-    .card {
-      background: white;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 16px;
-    }
-    .grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-    label {
-      display: block;
-      font-weight: 700;
-      font-size: 14px;
-      margin-bottom: 6px;
-    }
-    select, button {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #d1d5db;
-      border-radius: 10px;
-      font-size: 14px;
-    }
-    select[multiple] {
-      height: 180px;
-    }
-    button {
-      background: #2563eb;
-      color: white;
-      border: none;
-      cursor: pointer;
-      font-weight: 700;
-      margin-top: 12px;
-    }
-    .note {
-      font-size: 13px;
-      color: #6b7280;
-      margin-top: 10px;
-    }
-    @media (max-width: 700px) {
-      .grid {
-        grid-template-columns: 1fr;
-      }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panorama dopravy ČR</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #0056b3; --bg: #f8f9fa; --text: #333; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 0; }
+        header { background: white; padding: 20px; border-bottom: 1px solid #ddd; text-align: center; }
+        .container { max-width: 1200px; margin: 20px auto; padding: 0 20px; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); padding: 25px; margin-bottom: 20px; }
+        .loader { font-style: italic; color: #666; text-align: center; padding: 50px; }
+        h1 { margin: 0; color: var(--primary); font-size: 24px; }
+        .footer { text-align: center; font-size: 12px; color: #999; margin-top: 40px; padding-bottom: 20px; }
+    </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Nákladní doprava</h1>
-    <div class="sub">Jednoduchý graf z <strong>data.csv</strong>.</div>
 
-    <div class="card">
-      <div class="grid">
-        <div>
-          <label for="metric">Ukazatel</label>
-          <select id="metric"></select>
-        </div>
-        <div>
-          <label for="transport">Druh dopravy</label>
-          <select id="transport" multiple></select>
-        </div>
-      </div>
+<header>
+    <h1>📊 Panorama osobní dopravy ČR</h1>
+    <p>Interaktivní přehled založený na otevřených datech ČSÚ</p>
+</header>
 
-      <button id="loadBtn">Načíst data</button>
-      <div class="note" id="status">Připraveno.</div>
+<div class="container">
+    <div id="loader" class="loader">Načítám aktuální data z DataStat ČSÚ...</div>
+    
+    <div class="card" id="main-card" style="display:none;">
+        <div id="graph-title" style="font-weight:bold; margin-bottom:15px; font-size:18px;">Vývoj přepravních výkonů</div>
+        <div id="myGraph"></div>
     </div>
 
-    <div class="card">
-      <canvas id="chart" height="120"></canvas>
+    <div class="footer">
+        Zdroj dat: Český statistický úřad | Vytvořeno pomocí Plotly.js
     </div>
-  </div>
+</div>
 
-  <script>
-    let rows = [];
-    let chart;
+<script>
+    // TVŮJ ODKAZ NA CSV Z DATASTATU
+    const CSV_URL = 'https://data.csu.gov.cz/api/dotaz/v1/data/vybery/DOP01T1?format=CSV';
 
-    const metricEl = document.getElementById('metric');
-    const transportEl = document.getElementById('transport');
-    const statusEl = document.getElementById('status');
-    const loadBtn = document.getElementById('loadBtn');
+    Papa.parse(CSV_URL, {
+        download: true,
+        header: true,
+        dynamicTyping: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('main-card').style.display = 'block';
 
-    function toNumber(v) {
-      const n = Number(String(v ?? '').replace(',', '.').trim());
-      return Number.isFinite(n) ? n : null;
-    }
+            const rawData = results.data;
 
-    function selectedValues(select) {
-      return Array.from(select.selectedOptions).map(o => o.value);
-    }
+            // Zpracování dat (ČSÚ CSV má obvykle sloupce 'casobd_txt' pro čas a 'hodnota' pro čísla)
+            // Pokud se sloupce jmenují jinak, upravte názvy v hranatých závorkách níže:
+            const xData = rawData.map(d => d['casobd_txt'] || d[Object.keys(d)[0]]);
+            const yData = rawData.map(d => d['hodnota']);
 
-    function populateFilters() {
-      const metrics = [...new Set(rows.map(r => r.Ukazatel).filter(Boolean))];
-      const transports = [...new Set(rows.map(r => r["Druh dopravy"]).filter(Boolean))];
+            const trace = {
+                x: xData,
+                y: yData,
+                type: 'scatter',
+                mode: 'lines+markers',
+                line: { color: '#0056b3', width: 3 },
+                marker: { size: 7, color: '#0056b3' },
+                fill: 'tozeroy',
+                fillcolor: 'rgba(0, 86, 179, 0.1)',
+                name: 'Osobní doprava'
+            };
 
-      metricEl.innerHTML = metrics
-        .map(m => `<option value="${m}">${m}</option>`)
-        .join('');
+            const layout = {
+                autosize: true,
+                height: 500,
+                margin: { l: 50, r: 30, t: 20, b: 50 },
+                hovermode: 'x unified',
+                xaxis: { gridcolor: '#eee', zeroline: false },
+                yaxis: { gridcolor: '#eee', title: 'Počet (tis. os.-km)' }
+            };
 
-      transportEl.innerHTML = transports
-        .map(t => `<option value="${t}" selected>${t}</option>`)
-        .join('');
-    }
+            const config = { responsive: true, displayModeBar: false };
 
-    function drawChart() {
-      const metric = metricEl.value;
-      const transports = selectedValues(transportEl);
-
-      const filtered = rows.filter(r =>
-        r.Ukazatel === metric &&
-        transports.includes(r["Druh dopravy"])
-      );
-
-      const years = [...new Set(filtered.map(r => String(r.Roky)).filter(Boolean))]
-        .sort((a, b) => Number(a) - Number(b));
-
-      const datasets = transports.map(t => {
-        const vals = {};
-        filtered
-          .filter(r => r["Druh dopravy"] === t)
-          .forEach(r => {
-            vals[String(r.Roky)] = toNumber(r.Hodnota);
-          });
-
-        return {
-          label: t,
-          data: years.map(y => vals[y] ?? null),
-          tension: 0.2
-        };
-      });
-
-      if (chart) chart.destroy();
-
-      chart = new Chart(document.getElementById('chart'), {
-        type: 'line',
-        data: {
-          labels: years,
-          datasets
+            Plotly.newPlot('myGraph', [trace], layout, config);
         },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: {
-              position: 'bottom'
-            }
-          },
-          interaction: {
-            mode: 'nearest',
-            intersect: false
-          },
-          scales: {
-            y: {
-              beginAtZero: false
-            }
-          }
+        error: function(err) {
+            document.getElementById('loader').innerHTML = "⚠️ Nepodařilo se načíst data. Zkontrolujte API připojení k ČSÚ.";
         }
-      });
-    }
+    });
+</script>
 
-    async function loadData() {
-      try {
-        statusEl.textContent = 'Načítám data...';
-
-        const res = await fetch('data.csv');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-        const text = await res.text();
-
-        const parsed = Papa.parse(text, {
-          header: true,
-          skipEmptyLines: true,
-          transformHeader: (header) =>
-            String(header).replace(/^\uFEFF/, '').replace(/^"+|"+$/g, '').trim()
-        });
-
-        rows = parsed.data.map(r => ({
-          Ukazatel: String(r['Ukazatel'] ?? '').replace(/^"+|"+$/g, '').trim(),
-          Území: String(r['Území'] ?? '').replace(/^"+|"+$/g, '').trim(),
-          Roky: String(r['Roky'] ?? '').replace(/^"+|"+$/g, '').trim(),
-          "Druh dopravy": String(r['Druh dopravy'] ?? '').replace(/^"+|"+$/g, '').trim(),
-          Hodnota: String(r['Hodnota'] ?? '').replace(/^"+|"+$/g, '').trim()
-        })).filter(r =>
-          r.Ukazatel && r.Roky && r["Druh dopravy"] && r.Hodnota
-        );
-
-        populateFilters();
-        drawChart();
-
-        statusEl.textContent = `Načteno ${rows.length} řádků.`;
-      } catch (e) {
-        statusEl.textContent = 'Chyba při načtení dat: ' + e.message;
-      }
-    }
-
-    loadBtn.addEventListener('click', loadData);
-    metricEl.addEventListener('change', drawChart);
-    transportEl.addEventListener('change', drawChart);
-  </script>
 </body>
 </html>
