@@ -8,39 +8,48 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        :root { --primary: #0056b3; --bg: #f8f9fa; --text: #333; }
-        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 0; }
-        header { background: white; padding: 20px; border-bottom: 1px solid #ddd; text-align: center; }
-        .container { max-width: 1200px; margin: 20px auto; padding: 0 20px; }
-        .card { background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); padding: 25px; margin-bottom: 20px; }
-        .loader { font-style: italic; color: #666; text-align: center; padding: 50px; }
-        h1 { margin: 0; color: var(--primary); font-size: 24px; }
-        .footer { text-align: center; font-size: 12px; color: #999; margin-top: 40px; padding-bottom: 20px; }
+        :root { --primary: #0056b3; --bg: #f8f9fa; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg); margin: 0; color: #333; }
+        header { background: white; padding: 25px; border-bottom: 1px solid #ddd; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .container { max-width: 1000px; margin: 30px auto; padding: 0 20px; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.08); padding: 30px; }
+        .controls { margin-bottom: 20px; text-align: center; }
+        select { padding: 10px 15px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; width: 100%; max-width: 400px; cursor: pointer; }
+        h1 { margin: 0; color: var(--primary); font-size: 28px; }
+        .loader { text-align: center; padding: 100px; color: #666; }
+        .footer { text-align: center; margin-top: 50px; color: #888; font-size: 13px; padding-bottom: 30px; }
     </style>
 </head>
 <body>
 
 <header>
     <h1>📊 Panorama osobní dopravy ČR</h1>
-    <p>Interaktivní přehled založený na otevřených datech ČSÚ</p>
+    <p>Vyberte druh dopravy pro zobrazení detailu</p>
 </header>
 
 <div class="container">
-    <div id="loader" class="loader">Načítám aktuální data z DataStat ČSÚ...</div>
+    <div id="loader" class="loader">Načítám data z ČSÚ...</div>
     
-    <div class="card" id="main-card" style="display:none;">
-        <div id="graph-title" style="font-weight:bold; margin-bottom:15px; font-size:18px;">Vývoj přepravních výkonů</div>
-        <div id="myGraph"></div>
+    <div id="main-content" style="display:none;">
+        <div class="controls">
+            <label for="doprava-select"><strong>Druh dopravy:</strong></label><br><br>
+            <select id="doprava-select" onchange="updateGraph()">
+                </select>
+        </div>
+
+        <div class="card">
+            <div id="myGraph"></div>
+        </div>
     </div>
 
     <div class="footer">
-        Zdroj dat: Český statistický úřad | Vytvořeno pomocí Plotly.js
+        Zdroj: Český statistický úřad (DataStat) | Vývoj: tkozelsky80-bot
     </div>
 </div>
 
 <script>
-    // TVŮJ ODKAZ NA CSV Z DATASTATU
     const CSV_URL = 'https://data.csu.gov.cz/api/dotaz/v1/data/vybery/DOP01T1?format=CSV';
+    let globalData = [];
 
     Papa.parse(CSV_URL, {
         download: true,
@@ -48,45 +57,74 @@
         dynamicTyping: true,
         skipEmptyLines: true,
         complete: function(results) {
+            globalData = results.data;
             document.getElementById('loader').style.display = 'none';
-            document.getElementById('main-card').style.display = 'block';
+            document.getElementById('main-content').style.display = 'block';
 
-            const rawData = results.data;
+            // Naplnění výběrového menu
+            const druhyDopravy = [...new Set(globalData.map(item => item.vuz_txt))].filter(Boolean);
+            const select = document.getElementById('doprava-select');
+            
+            // Přidáme možnost "Všechny druhy"
+            let optionAll = document.createElement('option');
+            optionAll.value = "ALL";
+            optionAll.text = "Zobrazit vše najednou";
+            select.appendChild(optionAll);
 
-            // Zpracování dat (ČSÚ CSV má obvykle sloupce 'casobd_txt' pro čas a 'hodnota' pro čísla)
-            // Pokud se sloupce jmenují jinak, upravte názvy v hranatých závorkách níže:
-            const xData = rawData.map(d => d['casobd_txt'] || d[Object.keys(d)[0]]);
-            const yData = rawData.map(d => d['hodnota']);
+            druhyDopravy.forEach(druh => {
+                let option = document.createElement('option');
+                option.value = druh;
+                option.text = druh;
+                select.appendChild(option);
+            });
 
-            const trace = {
-                x: xData,
-                y: yData,
-                type: 'scatter',
-                mode: 'lines+markers',
-                line: { color: '#0056b3', width: 3 },
-                marker: { size: 7, color: '#0056b3' },
-                fill: 'tozeroy',
-                fillcolor: 'rgba(0, 86, 179, 0.1)',
-                name: 'Osobní doprava'
-            };
-
-            const layout = {
-                autosize: true,
-                height: 500,
-                margin: { l: 50, r: 30, t: 20, b: 50 },
-                hovermode: 'x unified',
-                xaxis: { gridcolor: '#eee', zeroline: false },
-                yaxis: { gridcolor: '#eee', title: 'Počet (tis. os.-km)' }
-            };
-
-            const config = { responsive: true, displayModeBar: false };
-
-            Plotly.newPlot('myGraph', [trace], layout, config);
-        },
-        error: function(err) {
-            document.getElementById('loader').innerHTML = "⚠️ Nepodařilo se načíst data. Zkontrolujte API připojení k ČSÚ.";
+            updateGraph(); // Prvotní vykreslení
         }
     });
+
+    function updateGraph() {
+        const selectedValue = document.getElementById('doprava-select').value;
+        let traces = [];
+
+        if (selectedValue === "ALL") {
+            // Vykreslíme všechny čáry
+            const druhyDopravy = [...new Set(globalData.map(item => item.vuz_txt))].filter(Boolean);
+            traces = druhyDopravy.map(druh => createTrace(druh));
+        } else {
+            // Vykreslíme jen jednu vybranou
+            traces = [createTrace(selectedValue)];
+        }
+
+        const layout = {
+            title: selectedValue === "ALL" ? 'Srovnání všech druhů dopravy' : `Detail: ${selectedValue}`,
+            height: 500,
+            hovermode: 'x unified',
+            xaxis: { title: 'Období', gridcolor: '#f0f0f0', tickangle: -45 },
+            yaxis: { title: 'mil. osobokilometrů', gridcolor: '#f0f0f0' },
+            margin: { t: 50, b: 100, l: 70, r: 30 },
+            showlegend: true,
+            legend: { orientation: 'h', y: -0.3 }
+        };
+
+        Plotly.newPlot('myGraph', traces, layout, { responsive: true });
+    }
+
+    function createTrace(druh) {
+        const filtered = globalData
+            .filter(item => item.vuz_txt === druh)
+            .sort((a, b) => String(a.casobd_txt).localeCompare(String(b.casobd_txt)));
+
+        return {
+            x: filtered.map(d => d.casobd_txt),
+            y: filtered.map(d => d.hodnota),
+            name: druh,
+            type: 'scatter',
+            mode: 'lines+markers',
+            fill: 'tozeroy', // Udělá efekt plochy pod čarou jako v Panoramatu
+            line: { width: 3 },
+            hovertemplate: '%{y} mil. os.-km<extra></extra>'
+        };
+    }
 </script>
 
 </body>
